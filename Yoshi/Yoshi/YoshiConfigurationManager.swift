@@ -14,7 +14,6 @@ final class YoshiConfigurationManager {
 
     private var yoshiMenuItems = [YoshiGenericMenu]()
     private var invocations: [YoshiInvocation]?
-    private var presentingWindow: UIWindow?
     private weak var debugViewController: DebugViewController?
 
     /**
@@ -33,7 +32,6 @@ final class YoshiConfigurationManager {
      Clears inertnal state.
      */
     func restart() {
-        presentingWindow = nil
         debugViewController = nil
         
         guard let invocations = invocations else {
@@ -64,29 +62,27 @@ final class YoshiConfigurationManager {
      Invokes the display of the debug menu.
      */
     func show() {
-        guard presentingWindow == nil else {
-            return
-        }
+        let window = UIApplication.shared.keyWindow
 
-        let window = UIWindow(frame: UIScreen.main.bounds)
-        window.windowLevel = .normal
+        let navigationController = UINavigationController()
+        let debugViewController = DebugViewController(
+            options: yoshiMenuItems,
+            isRootYoshiMenu: true,
+            completion: { completionBlock in
+                window?.rootViewController?.dismiss(
+                    animated: true,
+                    completion: { () -> Void in
+                        completionBlock?()
+                    }
+                )
+            }
+        )
 
-        // Use a dummy view controller with clear background.
-        // This way, we can make the actual view controller we want to present a form sheet on the iPad.
-        let rootViewController = UIViewController()
-        rootViewController.view.backgroundColor = UIColor.clear
+        navigationController.modalPresentationStyle = .formSheet
+        navigationController.setViewControllers([debugViewController], animated: false)
 
-        window.rootViewController = rootViewController
-        window.makeKeyAndVisible()
-
-        presentingWindow = window
-
-        // iOS doesn't like when modals are presented right away after a window's been made key and visible.
-        // We need to delay presenting the debug controller a bit to suppress the warning.
-        DispatchQueue.main.asyncAfter(deadline:
-                DispatchTime.now() + Double(Int64(0 * Double(NSEC_PER_SEC))) / Double(NSEC_PER_SEC)) {
-            self.presentDebugViewController()
-        }
+        window?.rootViewController?.present(navigationController, animated: true, completion: nil)
+        self.debugViewController = debugViewController
     }
 
     /// Return a navigation controller presenting the debug view controller.
@@ -114,29 +110,5 @@ final class YoshiConfigurationManager {
         if let completionHandler = debugViewController?.completionHandler {
             completionHandler(action)
         }
-        presentingWindow = nil
     }
-
-    private func presentDebugViewController() {
-        if let rootViewController = presentingWindow?.rootViewController {
-            let navigationController = UINavigationController()
-            let debugViewController = DebugViewController(options: yoshiMenuItems,
-                                                          isRootYoshiMenu: true,
-                                                          completion: { [weak self] completionBlock in
-                                                            rootViewController
-                                                                .dismiss(animated: true,
-                                                                    completion: { () -> Void in
-                                                                        self?.presentingWindow = nil
-                                                                        completionBlock?()
-                                                                })
-                })
-
-            navigationController.modalPresentationStyle = .formSheet
-            navigationController.setViewControllers([debugViewController], animated: false)
-
-            rootViewController.present(navigationController, animated: true, completion: nil)
-            self.debugViewController = debugViewController
-        }
-    }
-
 }
